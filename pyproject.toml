@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llada-guard"
+version = "0.1.0"
+description = "Safety content classifier based on LLaDA diffusion language model"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "torch>=2.0",
+    "transformers>=4.40,<5",
+    "peft>=0.10",
+    "datasets",
+    "accelerate",
+    "scikit-learn",
+    "tqdm",
+]
+
+[tool.setuptools.packages.find]
+include = ["llada_guard*", "llada_guard_infer*"]

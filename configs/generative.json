@@ -1,0 +1,24 @@
+{
+  "model": "GSAI-ML/LLaDA-8B-Instruct",
+  "revision": "08b83a6feb34df1a6011b80c3c00c7563e963b07",
+  "objective": "generative",
+  "lora": {
+    "rank": 64,
+    "alpha": 128,
+    "dropout": 0.2
+  },
+  "training": {
+    "epochs": 2,
+    "batch_size": 4,
+    "accumulation": 1,
+    "learning_rate": 0.00005,
+    "weight_decay": 0,
+    "warmup_steps": 50,
+    "max_length": 1280,
+    "max_grad_norm": 5,
+    "seed": 42,
+    "checkpoint_blocks": 16,
+    "workers": 4,
+    "world_size": 2
+  }
+}
