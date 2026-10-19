@@ -46,13 +46,62 @@ class SafetyDataset(Dataset):
     def __len__(self):
         return len(self.examples)
 
-    def _chat_token_count(self, content: str) -> int:
+    def _chat_token_count(
+        self, content: str, trusted_span: Optional[tuple[int, int]] = None
+    ) -> int:
         prompt_str = self.tokenizer.apply_chat_template(
             [{"role": "user", "content": content}],
             add_generation_prompt=True,
             tokenize=False,
         )
-        return len(self.tokenizer(prompt_str)["input_ids"])
+        ids, _ = self._encode_chat(prompt_str, content, trusted_span)
+        return len(ids) + len(self.tokenizer("")["input_ids"])
+
+    def _encode_chat(
+        self,
+        prompt_str: str,
+        content: str,
+        trusted_span: Optional[tuple[int, int]] = None,
+    ) -> tuple[list[int], list[tuple[int, int]]]:
+        """Tokenize a chat-formatted prompt without parsing special tokens in content.
+
+        Special-token strings typed by a user or agent (e.g. ``<|eot_id|>``,
+        ``<|mdm_mask|>``) stay plain text; only the chat template's own control
+        tokens are parsed. ``trusted_span`` (offsets within ``content``) marks
+        release-generated text, such as the synthetic mask response, whose
+        control tokens are kept.
+        """
+        content_start = prompt_str.find(content)
+        if content_start < 0:
+            raise ValueError("Classification prompt not found inside chat template")
+        content_end = content_start + len(content)
+        segments = [(0, content_start, False)]
+        if trusted_span is None:
+            segments.append((content_start, content_end, True))
+        else:
+            trusted_start = content_start + trusted_span[0]
+            trusted_end = content_start + trusted_span[1]
+            segments += [
+                (content_start, trusted_start, True),
+                (trusted_start, trusted_end, False),
+                (trusted_end, content_end, True),
+            ]
+        segments.append((content_end, len(prompt_str), False))
+
+        input_ids: list[int] = []
+        offsets: list[tuple[int, int]] = []
+        for start, end, split_special in segments:
+            if start == end:
+                continue
+            encoding = self.tokenizer(
+                prompt_str[start:end],
+                add_special_tokens=False,
+                return_offsets_mapping=True,
+                split_special_tokens=split_special,
+            )
+            input_ids.extend(encoding["input_ids"])
+            offsets.extend((s + start, e + start) for s, e in encoding["offset_mapping"])
+        return input_ids, offsets
 
     def _gen_total_len(
         self,
@@ -61,15 +110,19 @@ class SafetyDataset(Dataset):
         agent_response: Optional[str],
         categories: Optional[list[str]],
         violated_categories: Optional[list[str]] = None,
+        synthetic_response: bool = False,
     ) -> int:
-        prompt_len = self._chat_token_count(
-            build_prompt(
-                user_message,
-                agent_response,
-                categories=categories,
-                prompt_format=self.prompt_format,
-            )
+        prefix, conversation, suffix = build_prompt_parts(
+            user_message,
+            agent_response,
+            categories=categories,
+            prompt_format=self.prompt_format,
         )
+        trusted_span = None
+        if synthetic_response and agent_response is not None:
+            trusted_end = len(prefix) + len(conversation)
+            trusted_span = (trusted_end - len(agent_response), trusted_end)
+        prompt_len = self._chat_token_count(prefix + conversation + suffix, trusted_span)
         if verdict_text == "unsafe" and violated_categories:
             label_text = build_target(
                 False,
@@ -92,13 +145,20 @@ class SafetyDataset(Dataset):
     ) -> tuple[str, Optional[str]]:
         """Trim the response first, then the user text, until the pair fits."""
         while True:
-            gen_safe_total = self._gen_total_len("safe", user_message, agent_response, categories)
+            gen_safe_total = self._gen_total_len(
+                "safe",
+                user_message,
+                agent_response,
+                categories,
+                synthetic_response=not allow_agent_drop,
+            )
             gen_unsafe_total = self._gen_total_len(
                 "unsafe",
                 user_message,
                 agent_response,
                 categories,
                 violated_categories=violated_categories,
+                synthetic_response=not allow_agent_drop,
             )
             overflow = max(gen_safe_total, gen_unsafe_total) - self.max_seq_length
             if overflow <= 0:
@@ -125,6 +185,7 @@ class SafetyDataset(Dataset):
         agent_response: Optional[str],
         categories: Optional[list[str]],
         violated_categories: Optional[list[str]] = None,
+        synthetic_response: bool = False,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         prefix, conversation_text, suffix = build_prompt_parts(
             user_message,
@@ -138,17 +199,10 @@ class SafetyDataset(Dataset):
             add_generation_prompt=True,
             tokenize=False,
         )
-        prompt_encoding = self.tokenizer(
-            prompt_str,
-            add_special_tokens=False,
-            return_offsets_mapping=True,
-        )
-        prompt_ids = prompt_encoding["input_ids"]
-        prompt_offsets = prompt_encoding["offset_mapping"]
-
-        conversation_start = prompt_str.find(conversation_text)
-        if conversation_start < 0:
-            raise ValueError("Conversation span not found inside classification prompt")
+        content_start = prompt_str.find(prompt_text)
+        if content_start < 0:
+            raise ValueError("Classification prompt not found inside chat template")
+        conversation_start = content_start + len(prefix)
 
         user_span = f"User: {user_message}"
         user_start = conversation_start
@@ -160,6 +214,14 @@ class SafetyDataset(Dataset):
             response_span = f"\nAgent: {agent_response}"
             response_start = user_end
             response_end = response_start + len(response_span)
+
+        trusted_span = None
+        if synthetic_response and agent_response is not None:
+            trusted_end = response_end - content_start
+            trusted_span = (trusted_end - len(agent_response), trusted_end)
+        prompt_ids, prompt_offsets = self._encode_chat(
+            prompt_str, prompt_text, trusted_span
+        )
 
         prompt_block_ids = []
         for start, end in prompt_offsets:
@@ -253,12 +315,14 @@ class SafetyDataset(Dataset):
             user_message,
             rendered_agent_response,
             None,
+            synthetic_response=not had_response,
         )
         gen_unsafe_input_ids, gen_unsafe_block_ids = self._build_gen_sequence(
             "unsafe",
             user_message,
             rendered_agent_response,
             None,
+            synthetic_response=not had_response,
         )
         hazard_label_mask = int((not is_safe) and bool(violated))
         if hazard_label_mask:
@@ -268,6 +332,7 @@ class SafetyDataset(Dataset):
                 rendered_agent_response,
                 None,
                 violated_categories=violated,
+                synthetic_response=not had_response,
             )
         else:
             hazard_input_ids = gen_unsafe_input_ids
