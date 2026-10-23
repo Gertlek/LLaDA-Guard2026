@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "release": {
+    "repo": "Gertlek/LLaDA-Guard",
+    "revision": "cfacbcc9cb742e11a7aa9c91267daab65ea8fe8f",
+    "adapter_sha256": "cfb0b93fa20dd3f6d779cfc44cf58c931128ab5de49370a17b1280df12e39e3a",
+    "base_model": "GSAI-ML/LLaDA-8B-Instruct",
+    "base_revision": "08b83a6feb34df1a6011b80c3c00c7563e963b07"
+  },
+  "inference": {
+    "t_values": [
+      0.15,
+      0.15,
+      0.15
+    ],
+    "max_seq_length": 1536,
+    "batch_size": 4,
+    "threshold": 0,
+    "torch_dtype": "bfloat16",
+    "seed": 42
+  },
+  "hash_definition": "SHA-256 of UTF-8 bytes: json.dumps({\"examples\": examples, \"labels\": labels}, indent=2) + \"\\n\", Python defaults (ensure_ascii=True, sort_keys=False). Example keys in order: user_message, agent_response, is_safe. Labels: safe=0, unsafe=1. Includes example order.",
+  "provenance_limits": "",
+  "datasets": {
+    "xstest_response": {
+      "n": 446,
+      "unsafe": 78,
+      "sha256": "b39b23ac05c8a9eaba1a62ee7d416b2ec5e41b836f08f63995db4c325de806b8",
+      "safe": 368,
+      "repo": "allenai/xstest-response",
+      "config": null,
+      "split": "response_harmfulness",
+      "selection": "Keep nonempty prompts with harmful/unharmful labels; preserve source order."
+    },
+    "xstest": {
+      "n": 450,
+      "unsafe": 200,
+      "sha256": "5a20ae882b547680a95da787e471bc92f1891b3f882866d7f43e43f8487fa945",
+      "safe": 250,
+      "repo": "Paul/XSTest",
+      "config": null,
+      "split": "train",
+      "selection": "Keep nonempty prompts with safe/unsafe labels; preserve source order."
+    },
+    "toxicchat": {
+      "n": 2853,
+      "unsafe": 362,
+      "sha256": "7d435dd99438272723d10fa45babca728c9db1fab18edfdc346f566a2cce655c",
+      "safe": 2491,
+      "repo": "lmsys/toxic-chat",
+      "config": "toxicchat0124",
+      "split": "test",
+      "selection": "Keep human_annotation=true and nonempty user_input; toxicity=1 is unsafe; preserve source order."
+    },
+    "openai_mod": {
+      "n": 1680,
+      "unsafe": 522,
+      "sha256": "40a88057088499c6774d21001e412a5068287827766a363ec55ea03b0036dbd3",
+      "safe": 1158,
+      "repo": "mmathys/openai-moderation-api-evaluation",
+      "config": null,
+      "split": "train",
+      "selection": "Keep nonempty prompts; any positive S,H,V,HR,SH,S3,H2,V2 flag means unsafe; preserve source order."
+    },
+    "saferlhf": {
+      "n": 2000,
+      "unsafe": 1000,
+      "sha256": "8067e0d12f37f0bde8290f6172697335ed9aa99ed9134bac7fb9867c4651bf88",
+      "safe": 1000,
+      "repo": "PKU-Alignment/pku-safe_rlhf",
+      "config": null,
+      "split": "test",
+      "selection": "Flatten response_0 then response_1 for each nonempty prompt. Random(0): sample 1000 safe then 1000 unsafe independently; concatenate safe then unsafe; shuffle using the same RNG. Similar to WildGuard evaluation set. "
+    },
+    "beavertails": {
+      "n": 3021,
+      "unsafe": 1733,
+      "sha256": "af14969b0ca49e93f79c53ad59c1026a5a651a68876e4577d906fe161fef1b4e",
+      "safe": 1288,
+      "repo": "PKU-Alignment/BeaverTails",
+      "config": null,
+      "split": "30k_test",
+      "selection": "Keep nonempty prompts, strip response, use is_safe; preserve source order."
+    },
+    "phtest": {
+      "n": 2077,
+      "unsafe": 0,
+      "sha256": "67ffb32b7680425fc281e1aebd24b201a99c4a5ec825e1bce2325127c631aa72",
+      "safe": 2077,
+      "repo": null,
+      "config": null,
+      "split": null,
+      "selection": "Use saved phtest_harmless.jsonl in its original order, all harmless prompt-only rows."
+    }
+  }
+}

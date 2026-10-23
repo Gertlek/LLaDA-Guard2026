@@ -106,6 +106,9 @@ python3 scripts/eval_xstest_response.py \
 
 Add `-n 32` for a quick smoke run.
 
+For the LLaDA-Guard benchmark evaluation table, see
+[benchmark datasets and evaluation commands](llada_guard_infer/BENCHMARKS.md).
+
 ## Training
 
 See [Train and test](docs/training.md) for data preparation, training either
